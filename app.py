@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import exc as sqlalchemy_exc
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import os
 import sqlite3
@@ -234,12 +235,26 @@ def new_student():
                 flash('Los datos faciales no tienen el formato correcto')
                 return render_template('admin/new_student.html')
             
-            student = Student(name=name, dni=dni, face_encoding=face_data)
-            db.session.add(student)
-            db.session.commit()
-            print(f"Estudiante registrado exitosamente - ID: {student.id}")
-            flash('Estudiante registrado correctamente')
-            return redirect(url_for('manage_students'))
+            # Validar el descriptor facial
+            descriptor = face_data_json.get('descriptor')
+            if not isinstance(descriptor, list) or len(descriptor) == 0:
+                flash('El descriptor facial no es válido')
+                return render_template('admin/new_student.html')
+            
+            try:
+                student = Student(name=name, dni=dni, face_encoding=face_data)
+                db.session.add(student)
+                db.session.commit()
+                print(f"Estudiante registrado exitosamente - ID: {student.id}")
+                flash('Estudiante registrado correctamente')
+                return redirect(url_for('manage_students'))
+            except sqlalchemy.exc.IntegrityError as e:
+                db.session.rollback()
+                if 'UNIQUE constraint failed: student.dni' in str(e):
+                    flash('Ya existe un estudiante registrado con ese DNI')
+                else:
+                    flash('Error al registrar el estudiante en la base de datos')
+                return render_template('admin/new_student.html')
             
         except json.JSONDecodeError as e:
             print(f"Error al decodificar JSON de datos faciales: {str(e)}")
@@ -248,6 +263,8 @@ def new_student():
         except Exception as e:
             print(f"Error al registrar estudiante: {str(e)}")
             db.session.rollback()
+            flash('Error interno del servidor al procesar la solicitud')
+            return render_template('admin/new_student.html')
             flash('Error al registrar el estudiante')
             return render_template('admin/new_student.html')
     
