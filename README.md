@@ -127,22 +127,3 @@ Un sistema avanzado de votación que utiliza reconocimiento facial para garantiz
 ├── templates/       # Plantillas HTML
 └── requirements.txt # Dependencias
 ```
-
-### Contribución
-1. Fork del repositorio
-2. Crear rama para nueva función
-3. Commit de cambios
-4. Push a la rama
-5. Crear Pull Request
-
-## Licencia
-
-Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detalles.
-
-## Soporte
-
-Para reportar problemas o sugerir mejoras:
-1. Abrir un issue en el repositorio
-2. Describir el problema/sugerencia detalladamente
-3. Incluir pasos para reproducir el problema
-4. Adjuntar capturas de pantalla si es necesario
