@@ -65,6 +65,26 @@
         let faceDetected = false;
         let capturedFace = false;
         let faceData = null;
+
+        // Validar el formulario antes de enviar
+        document.getElementById('studentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value.trim();
+            const dni = document.getElementById('dni').value.trim();
+            
+            if (!name || !dni || !faceData) {
+                alert('Por favor, complete todos los campos y capture el rostro');
+                return;
+            }
+            
+            if (!/^\d{8}$/.test(dni)) {
+                alert('El DNI debe contener exactamente 8 dígitos');
+                return;
+            }
+            
+            this.submit();
+        });
         
         // Inicializar elementos DOM
         document.addEventListener('DOMContentLoaded', async () => {

@@ -207,16 +207,49 @@ def new_student():
     
     if request.method == 'POST':
         name = request.form.get('name')
+        dni = request.form.get('dni')
         face_data = request.form.get('face_data')  # Datos de codificación facial en formato JSON
         
-        if face_data:
-            student = Student(name=name, face_encoding=face_data)
+        print(f"Datos recibidos - Nombre: {name}, DNI: {dni}, Face Data presente: {'Sí' if face_data else 'No'}")
+        
+        # Validar DNI
+        if not dni or not dni.isdigit() or len(dni) != 8:
+            flash('El DNI debe ser un número de 8 dígitos')
+            return render_template('admin/new_student.html')
+        
+        # Verificar si el DNI ya existe
+        existing_student = Student.query.filter_by(dni=dni).first()
+        if existing_student:
+            flash('Ya existe un estudiante registrado con ese DNI')
+            return render_template('admin/new_student.html')
+        
+        if not face_data:
+            flash('No se pudo capturar el rostro correctamente')
+            return render_template('admin/new_student.html')
+        
+        try:
+            # Verificar que face_data sea un JSON válido
+            face_data_json = json.loads(face_data)
+            if not isinstance(face_data_json, dict) or 'descriptor' not in face_data_json:
+                flash('Los datos faciales no tienen el formato correcto')
+                return render_template('admin/new_student.html')
+            
+            student = Student(name=name, dni=dni, face_encoding=face_data)
             db.session.add(student)
             db.session.commit()
+            print(f"Estudiante registrado exitosamente - ID: {student.id}")
             flash('Estudiante registrado correctamente')
             return redirect(url_for('manage_students'))
-        else:
-            flash('No se pudo capturar el rostro correctamente')
+            
+        except json.JSONDecodeError as e:
+            print(f"Error al decodificar JSON de datos faciales: {str(e)}")
+            flash('Error en el formato de los datos faciales')
+            return render_template('admin/new_student.html')
+        except Exception as e:
+            print(f"Error al registrar estudiante: {str(e)}")
+            db.session.rollback()
+            flash('Error al registrar el estudiante')
+            return render_template('admin/new_student.html')
     
     return render_template('admin/new_student.html')
 
