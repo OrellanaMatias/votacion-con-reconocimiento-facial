@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sistema-votacion
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///database/votacion.db
+      - key: PYTHON_VERSION
+        value: 3.8.0
+    disk:
+      name: data
+      mountPath: /app/database
+      sizeGB: 1
