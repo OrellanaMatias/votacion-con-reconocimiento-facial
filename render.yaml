@@ -2,7 +2,9 @@ services:
   - type: web
     name: sistema-votacion
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0
+      pip install -r requirements.txt
     startCommand: python app.py
     envVars:
       - key: SECRET_KEY
@@ -10,7 +12,7 @@ services:
       - key: DATABASE_URL
         value: sqlite:///database/votacion.db
       - key: PYTHON_VERSION
-        value: 3.8.0
+        value: 3.11.11
     disk:
       name: data
       mountPath: /app/database
