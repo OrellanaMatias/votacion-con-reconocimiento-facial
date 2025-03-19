@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votar - {{ election.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h1 class="h3 mb-0">{{ election.title }}</h1>
+                        <a href="{{ url_for('index') }}" class="btn btn-light btn-sm">Volver a inicio</a>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages() %}
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-info">{{ message }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                        
+                        <div id="step1" class="voting-step">
+                            <h2 class="h4 mb-3 text-center">Paso 1: Verificar tu identidad</h2>
+                            <div class="text-center mb-4">
+                                <p>Para votar, primero necesitamos verificar tu identidad mediante reconocimiento facial.</p>
+                                <div class="position-relative mb-3">
+                                    <video id="video" width="400" height="300" autoplay muted class="border mx-auto d-block"></video>
+                                    <canvas id="overlay" width="400" height="300" class="position-absolute top-0 start-50 translate-middle-x"></canvas>
+                                </div>
+                                <button type="button" id="verifyBtn" class="btn btn-primary">Verificar identidad</button>
+                            </div>
+                        </div>
+                        
+                        <div id="step2" class="voting-step" style="display: none;">
+                            <h2 class="h4 mb-3 text-center">Paso 2: Selecciona tu candidato</h2>
+                            <div class="row">
+                                {% for candidate in candidates %}
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card h-100">
+                                            {% if candidate.photo %}
+                                                <img src="{{ url_for('static', filename='images/' + candidate.photo) }}" class="card-img-top" alt="{{ candidate.name }}">
+                                            {% else %}
+                                                <div class="card-img-top bg-light text-center py-5">Sin imagen</div>
+                                            {% endif %}
+                                            <div class="card-body">
+                                                <h5 class="card-title">{{ candidate.name }}</h5>
+                                                <p class="card-text">{{ candidate.description }}</p>
+                                            </div>
+                                            <div class="card-footer">
+                                                <button type="button" class="btn btn-success w-100 select-candidate" data-id="{{ candidate.id }}">Votar por este candidato</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div id="step3" class="voting-step" style="display: none;">
+                            <h2 class="h4 mb-3 text-center">Paso 3: Confirmar tu voto</h2>
+                            <div class="text-center">
+                                <p>Estás a punto de votar por: <strong id="selectedCandidateName"></strong></p>
+                                <p>Una vez confirmado, no podrás cambiar tu voto.</p>
+                                <form id="voteForm" method="POST" action="{{ url_for('vote', election_id=election.id) }}">
+                                    <input type="hidden" id="face_data" name="face_data">
+                                    <input type="hidden" id="candidate_id" name="candidate_id">
+                                    <button type="button" id="backBtn" class="btn btn-secondary me-2">Volver</button>
+                                    <button type="submit" class="btn btn-primary">Confirmar voto</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variables para el reconocimiento facial
+        let video, canvas, ctx, overlay, overlayCtx;
+        let faceDetected = false;
+        let studentIdentified = false;
+        let faceData = null;
+        let selectedCandidate = null;
+        
+        // Inicializar elementos DOM
+        document.addEventListener('DOMContentLoaded', async () => {
+            video = document.getElementById('video');
+            canvas = document.createElement('canvas');
+            ctx = canvas.getContext('2d');
+            overlay = document.getElementById('overlay');
+            overlayCtx = overlay.getContext('2d');
+            
+            // Cargar modelos de face-api.js
+            await loadFaceApiModels();
+            
+            // Iniciar la cámara
+            startCamera();
+            
+            // Eventos de botones
+            document.getElementById('verifyBtn').addEventListener('click', verifyIdentity);
+            document.getElementById('backBtn').addEventListener('click', () => {
+                document.getElementById('step3').style.display = 'none';
+                document.getElementById('step2').style.display = 'block';
+            });
+            
+            // Eventos para seleccionar candidato
+            document.querySelectorAll('.select-candidate').forEach(button => {
+                button.addEventListener('click', function() {
+                    const candidateId = this.getAttribute('data-id');
+                    const candidateName = this.closest('.card').querySelector('.card-title').textContent;
+                    selectCandidate(candidateId, candidateName);
+                });
+            });
+        });
+        
+        // Cargar modelos necesarios para face-api.js
+        async function loadFaceApiModels() {
+            const MODEL_URL = '{{ url_for("static", filename="models") }}';
+            
+            try {
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                console.log('Modelos cargados correctamente');
+            } catch (error) {
+                console.error('Error al cargar los modelos:', error);
+            }
+        }
+        
+        // Iniciar la cámara web
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                
+                // Comenzar detección de rostros
+                video.addEventListener('play', detectFaces);
+            } catch (error) {
+                console.error('Error al acceder a la cámara:', error);
+                alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara e intenta de nuevo.');
+            }
+        }
+        
+        // Detectar rostros en tiempo real
+        async function detectFaces() {
+            if (studentIdentified) return;
+            
+            const detection = await faceapi.detectSingleFace(
+                video, 
+                new faceapi.TinyFaceDetectorOptions()
+            ).withFaceLandmarks().withFaceDescriptor();
+            
+            // Limpiar el canvas de superposición
+            overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+            
+            if (detection) {
+                faceDetected = true;
+                document.getElementById('verifyBtn').disabled = false;
+                
+                // Dibujar rectángulo alrededor del rostro
+                const box = detection.detection.box;
+                overlayCtx.strokeStyle = '#00ff00';
+                overlayCtx.lineWidth = 2;
+                overlayCtx.strokeRect(box.x, box.y, box.width, box.height);
+            } else {
+                faceDetected = false;
+                document.getElementById('verifyBtn').disabled = true;
+            }
+            
+            // Continuar detección si no se ha identificado al estudiante
+            if (!studentIdentified) {
+                requestAnimationFrame(detectFaces);
+            }
+        }
+        
+        // Verificar identidad del estudiante
+        async function verifyIdentity() {
+            if (!faceDetected) return;
+            
+            // Capturar frame actual
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Obtener datos de la imagen
+            const imageData = canvas.toDataURL('image/jpeg');
+            
+            // Obtener descriptor facial
+            const detection = await faceapi.detectSingleFace(
+                video, 
+                new faceapi.TinyFaceDetectorOptions()
+            ).withFaceLandmarks().withFaceDescriptor();
+            
+            if (detection) {
+                // Guardar datos del rostro
+                faceData = {
+                    descriptor: Array.from(detection.descriptor),
+                    imageData: imageData
+                };
+                
+                // Actualizar campo oculto con los datos del rostro
+                document.getElementById('face_data').value = JSON.stringify(faceData);
+                
+                // Simular verificación exitosa (en producción se haría una llamada a la API)
+                studentIdentified = true;
+                
+                // Mostrar paso 2
+                document.getElementById('step1').style.display = 'none';
+                document.getElementById('step2').style.display = 'block';
+            } else {
+                alert('No se pudo detectar el rostro. Por favor, inténtalo de nuevo.');
+            }
+        }
+        
+        // Seleccionar candidato
+        function selectCandidate(candidateId, candidateName) {
+            selectedCandidate = candidateId;
+            document.getElementById('candidate_id').value = candidateId;
+            document.getElementById('selectedCandidateName').textContent = candidateName;
+            
+            // Mostrar paso 3
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step3').style.display = 'block';
+        }
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

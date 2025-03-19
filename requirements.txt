@@ -1,0 +1,10 @@
+Flask==2.0.1
+SQLAlchemy==1.4.23
+Werkzeug==2.0.1
+Flask-Login==0.5.0
+Flask-WTF==0.15.1
+WTForms==2.3.3
+Flask-SQLAlchemy==2.5.1
+Pillow==9.5.0
+numpy==1.21.2
+opencv-python==4.5.3.56
