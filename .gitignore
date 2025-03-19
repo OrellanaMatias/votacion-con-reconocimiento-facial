@@ -51,5 +51,4 @@ static/faces/*
 !static/faces/.gitkeep
 
 # Uploaded images
-static/images/*
 !static/images/.gitkeep
